@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GeoTrainer 4.3 — Teste Mapillary</title>
+<link rel="stylesheet" href="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.css">
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0c1720;color:#eef6fb;font:16px system-ui,Arial,sans-serif}main{max-width:950px;margin:auto;padding:18px}h1{font-size:1.7rem}p{line-height:1.5;color:#bbcad6}.panel{background:#192b39;border-radius:16px;padding:16px;margin:15px 0}label{display:block;font-weight:600;margin-bottom:8px}input{width:100%;padding:13px;border:1px solid #597183;background:#101e29;color:#fff;border-radius:9px;font-size:16px}button{background:#39b99c;border:0;border-radius:10px;padding:13px 18px;font-weight:700;color:#08251e;font-size:16px;margin-top:12px;cursor:pointer}button:disabled{opacity:.5}#viewer{height:min(64vh,560px);min-height:340px;background:#0c1822;border-radius:14px;overflow:hidden}#status{white-space:pre-wrap;color:#d5e7ee}small{color:#aabcc9}a{color:#83e0c7}.row{display:flex;gap:8px;flex-wrap:wrap}.row button{flex:1} .note{border-left:3px solid #39b99c;padding-left:12px}
+</style>
+</head>
+<body><main>
+<h1>🌍 GeoTrainer 4.3.1</h1>
+<p>Teste técnico de navegação real com Mapillary. Ainda não é uma rodada pontuada de GeoGuessr.</p>
+<section class="panel"><label for="token">Client Access Token do Mapillary</label><input id="token" type="password" autocomplete="off" placeholder="Cole o token aqui — não no GitHub"><small>O token fica apenas na memória desta página durante a sessão; não é gravado no repositório nem no armazenamento do navegador. Use somente o Client Access Token de leitura, nunca Client Secret.</small><div class="row"><button id="load">Carregar rua de teste</button><button id="clear" type="button">Limpar token</button></div></section>
+<div class="panel"><div id="status" role="status">Pronto para testar. A localização do teste é conhecida e não conta como rodada.</div></div>
+<div id="viewer" aria-label="Visualizador Mapillary"></div>
+<p class="note">Versão diagnóstica: tenta dois provedores de biblioteca. Se ambos falharem, não é um problema do token. </p><p class="note">No visualizador, tente tocar nas setas para avançar. Arrastar para olhar ao redor depende de a imagem ser panorâmica; fotografias comuns não oferecem visão 360°.</p>
+<p><small>Fonte: Mapillary. A disponibilidade de imagens e a API dependem do serviço. Se ocorrer erro, copie apenas a mensagem de erro, nunca o token.</small></p>
+</main>
+<script>
+window.geoLibraryState='Tentando carregar MapillaryJS';
+window.geoLibraryReady=(async()=>{
+ const urls=[
+  'https://cdn.jsdelivr.net/npm/mapillary-js@4.1.2/dist/mapillary.min.js',
+  'https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.min.js'
+ ];
+ for(const url of urls){
+  try{
+   await new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src=url;script.onload=resolve;script.onerror=()=>reject(new Error('Falha ao carregar '+new URL(url).hostname));document.head.appendChild(script);
+   });
+   if(window.mapillary?.Viewer){window.geoLibraryState='Biblioteca pronta via '+new URL(url).hostname;return true;}
+   window.geoLibraryState='Script carregou, mas não expôs mapillary.Viewer ('+new URL(url).hostname+')';
+  }catch(e){window.geoLibraryState=e.message;}
+ }
+ return false;
+})();
+</script>
+<script>
+(()=>{
+ const el=id=>document.getElementById(id), status=msg=>el('status').textContent=msg;
+ let viewer=null;
+ el('clear').onclick=()=>{el('token').value='';status('Token apagado desta página.');};
+ el('load').onclick=async()=>{
+  const token=el('token').value.trim();if(!token){status('Cole seu Client Access Token para começar.');return;}
+  el('load').disabled=true;status('Verificando biblioteca MapillaryJS...');
+  try{
+   if(!await window.geoLibraryReady)throw new Error('Biblioteca MapillaryJS indisponível: '+window.geoLibraryState+'. Teste abrir no Chrome, sem navegador interno.');
+   status('Biblioteca pronta. Consultando imagens de rua...');
+   // Região conhecida para diagnóstico técnico; NÃO é uma rodada secreta.
+   const bbox='2.290,48.853,2.310,48.866';
+   const url='https://graph.mapillary.com/images?fields=id,geometry,is_pano&limit=100&bbox='+encodeURIComponent(bbox)+'&access_token='+encodeURIComponent(token);
+   const response=await fetch(url);const data=await response.json();
+   if(!response.ok)throw new Error(data?.error?.message||'API retornou HTTP '+response.status);
+   const items=(data.data||[]).filter(x=>x.id);
+   if(!items.length)throw new Error('Nenhuma imagem encontrada na região de teste.');
+   if(!window.mapillary?.Viewer)throw new Error('Biblioteca MapillaryJS não carregou. Verifique conexão ou bloqueio do navegador.');
+   const pano=items.find(x=>x.is_pano) || items[0];
+   if(viewer){viewer.remove();viewer=null;el('viewer').replaceChildren();}
+   viewer=new mapillary.Viewer({accessToken:token,container:'viewer',imageId:pano.id});
+   status('Visualizador iniciado. Imagem '+pano.id+(pano.is_pano?' (panorâmica).':' (fotografia comum).')+' Tente as setas para navegar.');
+  }catch(e){status('Não foi possível iniciar: '+(e?.message||String(e))+'\nNão envie o token ao relatar o erro.');}
+  finally{el('load').disabled=false;}
+ };
+})();
+</script></body></html>

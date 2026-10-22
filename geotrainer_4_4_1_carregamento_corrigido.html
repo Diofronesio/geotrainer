@@ -1,0 +1,87 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GeoTrainer 4.4.1 — Aprendizado contínuo</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mapillary-js@4.1.2/dist/mapillary.css"><style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0c1720;color:#edf6f8;font:16px system-ui,Arial}main{max-width:980px;margin:auto;padding:16px}h1{font-size:1.7rem;margin-bottom:4px}.sub{color:#b5cbd5;margin-top:0}section,.panel{background:#182b39;border:1px solid #29475a;border-radius:15px;padding:15px;margin:13px 0}label{display:block;font-weight:650;margin:12px 0 6px}input,textarea,select{width:100%;border:1px solid #648294;background:#0c1c28;color:#fff;border-radius:9px;padding:12px;font:inherit}textarea{min-height:90px}button{background:#42c9a9;color:#08241e;border:0;border-radius:9px;padding:12px 15px;font-weight:750;font-size:15px;cursor:pointer}button.secondary{background:#2a4557;color:#f0f6fa}button:disabled{opacity:.55}.row{display:flex;flex-wrap:wrap;gap:8px}.row button{flex:1}.hidden{display:none!important}#viewer{height:min(62vh,550px);min-height:330px;border-radius:12px;overflow:hidden;background:#08151e}.status{white-space:pre-wrap;color:#c8e5e5}small,.muted{color:#a9c0cc}.history{display:grid;gap:9px}.entry{background:#10222e;border:1px solid #345064;border-radius:10px;padding:12px}.entry p{margin:7px 0;white-space:pre-wrap}a{color:#81dfca}.good{color:#78e3b4}.bad{color:#ffbdad}details{margin-top:8px}summary{cursor:pointer;font-weight:700}.tabs{display:flex;gap:8px;margin:14px 0}.tabs button{flex:1}#result{line-height:1.55;white-space:pre-wrap}hr{border:0;border-top:1px solid #365364;margin:12px 0}</style></head><body><main>
+<h1>🌍 GeoTrainer 4.4</h1><p class="sub">Aprendizado contínuo • ruas reais • histórico de estudos</p>
+<div class="tabs"><button id="tabTrain">Treinar</button><button class="secondary" id="tabHistory">Meu histórico</button></div>
+<div id="train">
+<section><label for="mapToken">Mapillary — Client Access Token (incluindo MLY|)</label><input type="password" id="mapToken" autocomplete="off" placeholder="Cole o token somente aqui"><small>Token usado nesta sessão, sem ser gravado no histórico. Nunca cole o Client Secret.</small>
+<details><summary>Professor com IA (opcional)</summary><p class="muted">Para análise automática, use uma chave pessoal do Google AI Studio com cota gratuita disponível. A chave fica somente nesta aba. Como o site é público, uma chave digitada no navegador não tem a mesma proteção de um servidor; use apenas uma chave pessoal com limites de uso e nunca a coloque no GitHub.</p><label for="aiKey">Chave Gemini API</label><input type="password" id="aiKey" autocomplete="off" placeholder="Opcional — não é o token Mapillary"><small>Sem chave: correção de país e revisão orientada por suas anotações, sem fingir análise visual por IA. O acesso gratuito à API não é ilimitado.</small></details>
+<div class="row"><button id="newRound">Nova localização aleatória</button></div><p class="status" id="status">Pronto. Insira o token Mapillary e comece.</p></section>
+<div id="round" class="hidden"><div id="viewer" aria-label="Rua navegável Mapillary"></div><p class="muted">Panoramas têm prioridade. Fotos comuns permitem avançar entre imagens conectadas, mas não olhar em 360°.</p><section><label for="notes">O que você observou? (vegetação, placas, postes, solo, arquitetura...)</label><textarea id="notes" placeholder="Anote as pistas e seu raciocínio antes de palpitar."></textarea><label for="guess">Seu palpite — país</label><input id="guess" list="countries" placeholder="Digite o país"><datalist id="countries"></datalist><div class="row"><button id="submit">Confirmar palpite e receber correção</button><button id="skip" class="secondary">Pular localização</button></div></section></div>
+<section id="feedback" class="hidden"><h2>Correção</h2><div id="result"></div><div class="row"><button id="again">Próxima localização</button><button id="reviewHistory" class="secondary">Ver histórico</button></div></section></div>
+<div id="historyPage" class="hidden"><section><h2>Meu histórico</h2><p class="muted">Registros ficam neste navegador e dispositivo. Exporte para não perder ao limpar os dados do navegador.</p><div class="row"><button id="exportHistory">Exportar histórico (.json)</button><button id="importHistory" class="secondary">Importar histórico</button><input id="importFile" type="file" accept="application/json,.json" class="hidden"></div><p id="historyCount" class="muted"></p><div id="historyList" class="history"></div></section></div>
+<p class="muted"><small>Fonte das ruas: Mapillary. O histórico registra o identificador da primeira imagem e um link para revisitar; a imagem continua sujeita à disponibilidade do serviço. Esta versão é um protótipo: a amostragem usa regiões predefinidas, não cobre todos os países, e a análise visual por IA depende da API Gemini e do acesso à imagem.</small></p>
+</main><script>
+window.mapillaryReady=(async()=>{for(const src of ['https://cdn.jsdelivr.net/npm/mapillary-js@4.1.2/dist/mapillary.min.js','https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.min.js']){try{await new Promise((ok,no)=>{let s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)});if(window.mapillary?.Viewer)return true}catch(e){}}return false})();
+</script><script>
+(()=>{'use strict';const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
+const regions=[
+['França','2.290,48.853,2.310,48.866'],['Brasil','-46.672,-23.565,-46.650,-23.545'],['Portugal','-9.155,38.708,-9.125,38.730'],['Espanha','-3.710,40.410,-3.680,40.430'],['Alemanha','13.385,52.505,13.420,52.525'],['Itália','12.475,41.885,12.505,41.910'],['Países Baixos','4.875,52.360,4.915,52.380'],['Bélgica','4.335,50.835,4.375,50.855'],['Reino Unido','-0.145,51.500,-0.110,51.520'],['Estados Unidos','-73.995,40.720,-73.965,40.745'],['Canadá','-79.400,43.645,-79.370,43.670'],['México','-99.150,19.420,-99.120,19.450'],['Argentina','-58.405,-34.615,-58.375,-34.590'],['Chile','-70.665,-33.460,-70.635,-33.430'],['Uruguai','-56.180,-34.915,-56.150,-34.885'],['Japão','139.690,35.675,139.720,35.700'],['Coreia do Sul','126.965,37.550,127.000,37.580'],['Austrália','151.195,-33.880,151.225,-33.850'],['Nova Zelândia','174.755,-36.860,174.785,-36.835'],['África do Sul','18.415,-33.935,18.445,-33.910'],['Noruega','10.735,59.905,10.765,59.930'],['Suécia','18.045,59.320,18.080,59.345'],['Dinamarca','12.550,55.665,12.585,55.690'],['Polônia','21.000,52.220,21.035,52.245'],['República Tcheca','14.405,50.075,14.440,50.100'],['Áustria','16.355,48.195,16.390,48.220'],['Suíça','8.525,47.365,8.555,47.390'],['Turquia','28.960,41.010,29.000,41.040'],['Taiwan','121.500,25.020,121.535,25.050'],['Singapura','103.835,1.285,103.865,1.315']];
+const aliases={'holanda':'Países Baixos','inglaterra':'Reino Unido','eua':'Estados Unidos','usa':'Estados Unidos','estados unidos da america':'Estados Unidos','coreia do sul':'Coreia do Sul','republica tcheca':'República Tcheca','chequia':'República Tcheca'};
+const norm=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+regions.map(x=>x[0]).sort((a,b)=>a.localeCompare(b,'pt')).forEach(c=>{let o=document.createElement('option');o.value=c;$('countries').append(o)});
+const store='geotrainer-history-v44',seenKey='geotrainer-seen-v44';let history=[],seen=[],viewer=null,current=null,busy=false;
+try{history=JSON.parse(localStorage.getItem(store)||'[]');seen=JSON.parse(localStorage.getItem(seenKey)||'[]');if(!Array.isArray(history))history=[];if(!Array.isArray(seen))seen=[]}catch(e){history=[];seen=[]}
+function save(){try{localStorage.setItem(store,JSON.stringify(history));localStorage.setItem(seenKey,JSON.stringify(seen))}catch(e){alert('Armazenamento cheio ou indisponível. Exporte o histórico para guardar os registros.')}}
+function tab(h){$('train').classList.toggle('hidden',h);$('historyPage').classList.toggle('hidden',!h);$('tabTrain').classList.toggle('secondary',h);$('tabHistory').classList.toggle('secondary',!h);if(h)renderHistory()}
+$('tabTrain').onclick=()=>tab(false);$('tabHistory').onclick=()=>tab(true);$('reviewHistory').onclick=()=>tab(true);
+function pickRegion(){const prev=new Set(history.slice(-8).map(h=>h.country));let pool=regions.filter(r=>!prev.has(r[0]));if(!pool.length)pool=regions;return pool[Math.floor(Math.random()*pool.length)]}
+async function api(url){let r=await fetch(url),j=await r.json();if(!r.ok)throw Error(j?.error?.message||'HTTP '+r.status);return j}
+async function newRound(){
+ if(busy)return;
+ const token=$('mapToken').value.trim();
+ if(!token){say('Insira seu Client Access Token do Mapillary, incluindo MLY|.');return}
+ busy=true;$('newRound').disabled=true;
+ $('feedback').classList.add('hidden');$('round').classList.add('hidden');
+ say('Buscando uma rua nova com consultas menores...');
+ try{
+  if(!await window.mapillaryReady)throw Error('Biblioteca MapillaryJS não carregou. Abra no Chrome.');
+  let chosen=null,region=null,lastError='';
+  const shuffled=[...regions].sort(()=>Math.random()-.5);
+  const recent=new Set(history.slice(0,8).map(h=>h.country));
+  shuffled.sort((a,b)=>Number(recent.has(a[0]))-Number(recent.has(b[0])));
+  for(let i=0;i<Math.min(shuffled.length,18);i++){
+   region=shuffled[i];
+   say('Procurando uma rua... região '+(i+1)+' de até 18.');
+   try{
+    // Consultas pequenas: NÃO solicitar thumbnails nem geometry em lote.
+    const params=new URLSearchParams({fields:'id,is_pano',limit:'15',bbox:region[1],access_token:token});
+    const j=await api('https://graph.mapillary.com/images?'+params.toString());
+    const imgs=(j.data||[]).filter(x=>x.id&&!seen.includes(String(x.id)));
+    if(!imgs.length)continue;
+    const panoramas=imgs.filter(x=>x.is_pano);
+    const pool=panoramas.length?panoramas:imgs;
+    chosen=pool[Math.floor(Math.random()*pool.length)];
+    break;
+   }catch(err){
+    lastError=err.message||String(err);
+    if(/token|oauth|permission|unauthoriz|invalid|access denied|HTTP 401|HTTP 403/i.test(lastError))throw err;
+    // Uma região falhou? Continue procurando sem encerrar o treino.
+   }
+  }
+  if(!chosen)throw Error('Não encontrei imagens disponíveis nas regiões consultadas. '+(lastError?'Último retorno: '+lastError:''));
+  if(viewer){viewer.remove();viewer=null;$('viewer').replaceChildren()}
+  viewer=new mapillary.Viewer({accessToken:token,container:'viewer',imageId:String(chosen.id)});
+  current={id:String(chosen.id),country:region[0],pano:!!chosen.is_pano,thumb:'',created:new Date().toISOString()};
+  // Solicitar a miniatura SOMENTE da imagem escolhida, não de todo o lote.
+  try{
+   const detail=await api('https://graph.mapillary.com/'+encodeURIComponent(String(chosen.id))+'?'+new URLSearchParams({fields:'thumb_1024_url',access_token:token}));
+   current.thumb=detail.thumb_1024_url||'';
+  }catch(err){/* A miniatura é opcional; não impedir a rodada. */}
+  seen.push(String(chosen.id));save();$('notes').value='';$('guess').value='';
+  $('round').classList.remove('hidden');
+  say('Rua carregada! Explore, anote pistas e depois confirme seu palpite.');
+ }catch(e){say('Não foi possível carregar: '+(e.message||e)+'\nNão envie seus tokens ao relatar o erro.')}
+ finally{busy=false;$('newRound').disabled=false}
+}
+$('newRound').onclick=newRound;$('again').onclick=newRound;$('skip').onclick=()=>{if(current){history.unshift({...current,guess:'(pulada)',notes:$('notes').value,correct:null,analysis:'Localização pulada sem correção.'});save();current=null}newRound()};
+function basicReview(rec){let good=rec.correct?'Você acertou o país!':'Seu palpite não corresponde ao país desta localização.';return good+'\n\nPaís correto: '+rec.country+'.\nSeu palpite: '+rec.guess+'.\n\nSuas observações: '+(rec.notes||'(nenhuma registrada)')+'\n\nRevisão: volte à imagem inicial e procure evidências verificáveis como sentido da circulação, tipos de delineadores, sinalização, postes, pavimento e vegetação. Não é possível afirmar quais dessas pistas aparecem na imagem sem analisá-la visualmente. Evite usar letras ou números de placas de veículos.'}
+async function aiReview(rec){const key=$('aiKey').value.trim();if(!key)return {text:basicReview(rec)+'\n\nIA visual não ativada: adicione uma chave Gemini para análise automática.',visual:false};let prompt='Você é professor de GeoGuessr em português do Brasil. O estudante acabou de palpitar. País correto: '+rec.country+'. Palpite: '+rec.guess+'. Observações do estudante: '+(rec.notes||'nenhuma')+'. Analise especificamente o raciocínio, diferencie pistas fortes e fracas, ensine 3 coisas a procurar e sugira um exercício. Não use letras/números de placas de veículos. NÃO invente detalhes visuais. Se não houver imagem anexada, diga explicitamente que a análise é somente das observações do estudante, sem inspeção visual.';
+let parts=[{text:prompt}],visual=false;if(rec.thumb){try{let r=await fetch(rec.thumb);if(r.ok){let blob=await r.blob();if(blob.type.startsWith('image/')&&blob.size<4500000){let b64=await new Promise((ok,no)=>{let reader=new FileReader();reader.onload=()=>ok(reader.result.split(',')[1]);reader.onerror=no;reader.readAsDataURL(blob)});parts.push({inline_data:{mime_type:blob.type,data:b64}});visual=true}}}catch(e){}}
+const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.3,maxOutputTokens:900}})});const data=await resp.json();if(!resp.ok)throw Error(data?.error?.message||'Gemini HTTP '+resp.status);let text=(data.candidates?.[0]?.content?.parts||[]).map(x=>x.text||'').join('\n');if(!text)throw Error('Gemini não retornou análise textual.');return {text:(visual?'Análise com imagem inicial anexada:\n\n':'Análise das suas anotações (imagem não pôde ser enviada):\n\n')+text,visual}}
+$('submit').onclick=async()=>{if(!current||busy)return;let guess=$('guess').value.trim();if(!guess){say('Escreva um país antes de confirmar.');return}let resolved=aliases[norm(guess)]||guess;let rec={...current,guess,notes:$('notes').value,correct:norm(resolved)===norm(current.country),analysis:'Analisando...',visual:false};current=null;busy=true;$('submit').disabled=true;$('round').classList.add('hidden');$('feedback').classList.remove('hidden');$('result').textContent='País correto: '+rec.country+'\nSeu palpite: '+guess+'\n\nPreparando correção...';history.unshift(rec);save();try{let a=await aiReview(rec);rec.analysis=a.text;rec.visual=a.visual}catch(e){rec.analysis=basicReview(rec)+'\n\nA análise Gemini falhou: '+e.message+'\nVocê pode continuar estudando normalmente.'}save();$('result').textContent=rec.analysis;busy=false;$('submit').disabled=false;say('Correção salva no histórico. Você pode continuar sem limite de rodadas.')};
+function text(parent,tag,value,cls){let e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;parent.appendChild(e);return e}
+function renderHistory(){let box=$('historyList');box.replaceChildren();$('historyCount').textContent=history.length+' localização(ões) registrada(s).';for(let rec of history){let d=document.createElement('div');d.className='entry';text(d,'strong',new Date(rec.created).toLocaleString('pt-BR')+' — '+rec.country);text(d,'p','Palpite: '+rec.guess+(rec.correct===null?' (pulada)':rec.correct?' ✓':' ✗'));text(d,'p','Pistas: '+(rec.notes||'(sem anotações)'));let a=document.createElement('a');a.href='https://www.mapillary.com/app/?pKey='+encodeURIComponent(rec.id);a.target='_blank';a.rel='noopener noreferrer';a.textContent='Revisitar imagem inicial no Mapillary';d.append(a);let details=document.createElement('details');let s=document.createElement('summary');s.textContent='Ver correção';details.append(s);text(details,'p',rec.analysis||'Sem correção');d.append(details);box.append(d)}if(!history.length)text(box,'p','Seu histórico aparecerá aqui depois do primeiro palpite.')}
+$('exportHistory').onclick=()=>{let blob=new Blob([JSON.stringify({version:44,history},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='geotrainer-historico-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+$('importHistory').onclick=()=>$('importFile').click();$('importFile').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let data=JSON.parse(await f.text());if(!Array.isArray(data.history))throw Error('Formato inválido');let known=new Set(history.map(x=>x.id+'|'+x.created));for(let rec of data.history){if(typeof rec.id==='string'&&typeof rec.created==='string'&&!known.has(rec.id+'|'+rec.created)){history.push(rec);known.add(rec.id+'|'+rec.created)}}history.sort((a,b)=>b.created.localeCompare(a.created));save();renderHistory();alert('Histórico importado.')}catch(err){alert('Não foi possível importar: '+err.message)}e.target.value=''};
+})();
+</script></body></html>
